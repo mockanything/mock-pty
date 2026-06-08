@@ -1,6 +1,7 @@
 import { EventEmitter2 } from './event-emitter'
 import type { IPty, IPtyForkOptions } from './types'
-import { getCwd, getEnv } from './platform'
+import { getEnv } from './platform'
+import { MockFileSystem } from './file-system'
 
 export class MockPty implements IPty {
   public readonly pid: number
@@ -11,7 +12,7 @@ export class MockPty implements IPty {
   private _name: string
   private _file: string
   private _args: string[]
-  private _cwd: string
+  private _fs: MockFileSystem
   private _env: Record<string, string | undefined>
   private _processTitle: string
   private _flowControlPause: string
@@ -37,7 +38,7 @@ export class MockPty implements IPty {
     this._name = options?.name ?? 'xterm-256color'
     this._file = file
     this._args = Array.isArray(args) ? args : [args]
-    this._cwd = options?.cwd ?? getCwd()
+    this._fs = new MockFileSystem()
     this._env = options?.env ?? (getEnv() as Record<string, string | undefined>)
     this._processTitle = file.split('/').pop()?.split('\\').pop() ?? 'mock-pty'
     this.handleFlowControl = options?.handleFlowControl ?? false
@@ -53,8 +54,7 @@ export class MockPty implements IPty {
 
   private _simulateStartup(): void {
     setTimeout(() => {
-      this._writeOutput(`MockPty: Started ${this._file} with args [${this._args.join(', ')}]\r\n`)
-      this._writeOutput(`Working directory: ${this._cwd}\r\n`)
+      this._writeOutput(`[mock-pty] ${this._file} started\r\n`)
       this._writePrompt()
     }, 50)
   }
@@ -82,7 +82,7 @@ export class MockPty implements IPty {
   }
 
   private _writePrompt(): void {
-    this._writeOutput('$ ')
+    this._writeOutput(`root@mockhost:${this._fs.cwdPath}# `)
   }
 
   write(data: string | Buffer): void {
@@ -198,17 +198,19 @@ export class MockPty implements IPty {
   }
 
   private _handleTab(): void {
-    const commands = ['ls', 'll', 'pwd', 'whoami', 'echo', 'clear', 'exit', 'help', 'cd']
-    const matches = commands.filter((cmd) => cmd.startsWith(this._currentInput))
+    const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history']
+    const fsCompletions = this._fs.complete(this._currentInput)
+    const all = [...builtins.filter((c) => c.startsWith(this._currentInput)), ...fsCompletions].sort()
+    const matches = [...new Set(all)]
 
     if (matches.length === 1) {
       const completion = matches[0].slice(this._currentInput.length)
-      this._currentInput = matches[0]
+      this._currentInput = matches[0].replace(/\/$/, '')
       this._writeOutput(completion)
     } else if (matches.length > 1) {
       this._writeOutput('\r\n')
       matches.forEach((cmd) => this._writeOutput(`${cmd}    `))
-      this._writeOutput(`\r\n$ ${this._currentInput}`)
+      this._writeOutput(`\r\nroot@mockhost:${this._fs.cwdPath}# ${this._currentInput}`)
     }
   }
 
@@ -221,7 +223,15 @@ export class MockPty implements IPty {
     if (this._isDestroyed) return
     this._writeOutput('\r\n')
 
-    switch (command.trim()) {
+    const trimmed = command.trim()
+    if (!trimmed) { this._writePrompt(); return }
+
+    // Parse command and args
+    const parts = this._parseCommandLine(trimmed)
+    const cmd = parts[0]
+    const args = parts.slice(1).join(' ')
+
+    switch (cmd) {
       case 'exit':
       case 'quit':
         this.destroy(0)
@@ -231,39 +241,124 @@ export class MockPty implements IPty {
         this._writeOutput('\x1b[2J\x1b[0;0H')
         break
       case 'pwd':
-        this._writeOutput(`${this._cwd}\r\n`)
+        this._writeOutput(`${this._fs.cwdPath}\r\n`)
         break
       case 'whoami':
-        this._writeOutput('mock-user\r\n')
-        break
-      case 'ls':
-      case 'dir':
-        this._writeOutput('file1.txt\tfile2.js\tREADME.md\tdocuments/\r\n')
-        break
-      case 'echo':
-        this._writeOutput(`${command.substring(5)}\r\n`)
+        this._writeOutput('root\r\n')
         break
       case 'history':
         this._writeOutput(`${this._history.join('')}\r\n`)
         break
       case 'help':
-        this._writeOutput('Available commands: ls, ll, pwd, whoami, echo, clear, exit, help\r\n')
+        this._writeOutput(
+          'Built-in commands:\r\n' +
+          '  ls, ll, cd, pwd, cat, whoami, echo, touch, mkdir, rm, rmdir,\r\n' +
+          '  clear, exit, help, history\r\n'
+        )
+        break
+      case 'echo':
+        this._handleEcho(args)
+        break
+      case 'cd':
+        this._handleCd(args)
+        break
+      case 'ls':
+      case 'll':
+      case 'dir':
+        this._writeOutput(this._fs.ls((cmd === 'll' ? '-l ' : '') + args))
+        break
+      case 'cat':
+        this._handleCat(args)
+        break
+      case 'touch':
+        this._handleFsCmd('touch', args)
+        break
+      case 'mkdir':
+        this._handleFsCmd('mkdir', args)
+        break
+      case 'rm':
+        this._handleFsCmd('rm', args)
+        break
+      case 'rmdir':
+        this._handleFsCmd('rmdir', args)
         break
       default:
-        if (command.startsWith('echo ')) {
-          this._writeOutput(`${command.substring(5)}\r\n`)
-        } else if (command.startsWith('cd ')) {
-          this._cwd = command.substring(3)
-          this._writeOutput(`Changed directory to ${this._cwd}\r\n`)
-        } else if (command.trim() === '') {
-          // noop
-        } else {
-          this._writeOutput(`mockpty: command not found: ${command}\r\n`)
-        }
+        this._handleUnknown(cmd, trimmed)
     }
 
-    if (!['exit', 'quit'].includes(command.trim())) {
-      this._writePrompt()
+    this._writePrompt()
+  }
+
+  private _parseCommandLine(input: string): string[] {
+    const parts: string[] = []
+    let cur = ''
+    let inQuote = false
+    for (const ch of input) {
+      if (ch === '"' || ch === "'") { inQuote = !inQuote; continue }
+      if (ch === ' ' && !inQuote) { if (cur) { parts.push(cur); cur = '' }; continue }
+      cur += ch
+    }
+    if (cur) parts.push(cur)
+    return parts
+  }
+
+  private _handleEcho(args: string): void {
+    const redirectMatch = args.match(/^(.+?)\s*(>>?)\s*(.+)$/)
+    if (redirectMatch) {
+      const text = redirectMatch[1]
+      const op = redirectMatch[2]
+      const target = redirectMatch[3].trim()
+      const err = op === '>>' ? this._fs.appendFile(target, text + '\n') : this._fs.writeFile(target, text + '\n')
+      if (err) this._writeOutput(err + '\r\n')
+    } else {
+      this._writeOutput(args + '\r\n')
+    }
+  }
+
+  private _handleCd(args: string): void {
+    const target = args || '/root'
+    const err = this._fs.cd(target)
+    if (err) this._writeOutput(err + '\r\n')
+  }
+
+  private _handleCat(args: string): void {
+    if (!args) { this._writeOutput('cat: missing operand\r\n'); return }
+    const files = args.split(/\s+/)
+    for (const file of files) {
+      const result = this._fs.cat(file)
+      if (result === null) {
+        this._writeOutput(`cat: ${file}: No such file or directory\r\n`)
+      } else {
+        this._writeOutput(result.endsWith('\n') ? result : result + '\n')
+      }
+    }
+  }
+
+  private _handleFsCmd(cmd: string, args: string): void {
+    const targets = args.split(/\s+/).filter(Boolean)
+    if (targets.length === 0) {
+      this._writeOutput(`${cmd}: missing operand\r\n`)
+      return
+    }
+    for (const target of targets) {
+      let err: string | null = null
+      switch (cmd) {
+        case 'touch': err = this._fs.touch(target); break
+        case 'mkdir': err = this._fs.mkdir(target); break
+        case 'rm': err = this._fs.rm(target); break
+        case 'rmdir': err = this._fs.rmdir(target); break
+      }
+      if (err) this._writeOutput(err + '\r\n')
+    }
+  }
+
+  private _handleUnknown(cmd: string, full: string): void {
+    if (this._fs.getEntry(cmd)) {
+      this._writeOutput(`bash: ${cmd}: Is a directory\r\n`)
+    } else if (this._fs.getEntry('/bin/' + cmd)) {
+      this._writeOutput(`bash: ${cmd}: command output simulated\r\n`)
+    } else {
+      this._writeOutput(`bash: ${cmd}: command not found\r\n`)
     }
   }
 

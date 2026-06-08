@@ -1,4 +1,5 @@
 import { MockPty } from './mock-pty'
+import { MockFileSystem } from './file-system'
 import type {
   IPty,
   IPtyForkOptions,
@@ -10,6 +11,7 @@ import type {
 } from './types'
 
 export { MockPty }
+export { MockFileSystem }
 export type {
   IPty,
   IBasePtyForkOptions,
