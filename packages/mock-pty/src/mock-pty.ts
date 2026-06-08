@@ -135,9 +135,10 @@ export class MockPty implements IPty {
         return
     }
 
-    if (char >= ' ' && char <= '~') {
-      this._handlePrintableChar(char)
+    if (char.length === 1 && char.charCodeAt(0) < 0x20) {
+      return
     }
+    this._handlePrintableChar(char)
   }
 
   private _handleEnter(): void {

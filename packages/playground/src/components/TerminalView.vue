@@ -89,7 +89,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .terminal-container {
-  width: 100vw;
-  height: 100vh;
+  width: calc(100vw - 32px);
+  height: calc(100vh - 32px);
+  margin: 16px;
 }
 </style>
