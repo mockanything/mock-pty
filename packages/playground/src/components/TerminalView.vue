@@ -21,6 +21,7 @@ onMounted(() => {
   if (!terminalContainer.value) return
 
   terminal = new Terminal({
+    allowProposedApi: true,
     cursorBlink: true,
     cursorStyle: 'block',
     fontSize: 14,
@@ -52,6 +53,7 @@ onMounted(() => {
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
   terminal.loadAddon(new Unicode11Addon())
+  terminal.unicode.activeVersion = '11'
   terminal.open(terminalContainer.value)
   fitAddon.fit()
 
