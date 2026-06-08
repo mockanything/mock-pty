@@ -147,10 +147,39 @@ export class MockPty implements IPty {
     this._handleCommandExecution(command)
   }
 
+  private static _charWidth(char: string): number {
+    const code = char.codePointAt(0)!
+    if (code < 0x20 || (code >= 0x7F && code < 0xA0)) return 0
+    if (code < 0x7F) return 1
+    if (code === 0x00AD || code === 0x200B || code === 0x200C || code === 0x200D || code === 0xFEFF) return 0
+    if ((code >= 0x0300 && code <= 0x036F) || (code >= 0xFE00 && code <= 0xFE0F)) return 0
+    if (
+      (code >= 0x1100 && code <= 0x115F) ||
+      (code >= 0x2E80 && code <= 0x9FFF) ||
+      (code >= 0xAC00 && code <= 0xD7AF) ||
+      (code >= 0xF900 && code <= 0xFAFF) ||
+      (code >= 0xFE10 && code <= 0xFE19) ||
+      (code >= 0xFE30 && code <= 0xFE6F) ||
+      (code >= 0xFF01 && code <= 0xFF60) ||
+      (code >= 0xFFE0 && code <= 0xFFE6) ||
+      (code >= 0x1F000 && code <= 0x1F9FF) ||
+      (code >= 0x1FA00 && code <= 0x1FBFF) ||
+      (code >= 0x20000 && code <= 0x2FA1F) ||
+      (code >= 0x2600 && code <= 0x27BF) ||
+      (code >= 0x2300 && code <= 0x23FF)
+    ) return 2
+    return 1
+  }
+
   private _handleBackspace(): void {
-    if (this._currentInput.length > 0) {
-      this._currentInput = this._currentInput.slice(0, -1)
-      this._writeOutput('\b \b')
+    const chars = Array.from(this._currentInput)
+    if (chars.length > 0) {
+      const lastChar = chars.pop()!
+      this._currentInput = chars.join('')
+      const width = MockPty._charWidth(lastChar)
+      for (let i = 0; i < width; i++) {
+        this._writeOutput('\b \b')
+      }
     }
   }
 

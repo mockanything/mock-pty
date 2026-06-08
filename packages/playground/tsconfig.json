@@ -13,7 +13,7 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "paths": {
-      "mock-pty": ["../mock-pty/src"]
+      "@gausszhou/mock-pty": ["../mock-pty/src"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.vue"],

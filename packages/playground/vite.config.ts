@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [vue()],
   resolve: {
     alias: {
-      'mock-pty': resolve(__dirname, '../mock-pty/src'),
+      '@gausszhou/mock-pty': resolve(__dirname, '../mock-pty/src'),
     },
   },
 })

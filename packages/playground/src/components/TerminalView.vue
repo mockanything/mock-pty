@@ -6,8 +6,9 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
-import { spawn } from 'mock-pty'
-import type { IDisposable } from 'mock-pty'
+import { Unicode11Addon } from '@xterm/addon-unicode11'
+import { spawn } from '@gausszhou/mock-pty'
+import type { IDisposable } from '@gausszhou/mock-pty'
 import '@xterm/xterm/css/xterm.css'
 
 const terminalContainer = ref<HTMLDivElement>()
@@ -50,6 +51,7 @@ onMounted(() => {
 
   fitAddon = new FitAddon()
   terminal.loadAddon(fitAddon)
+  terminal.loadAddon(new Unicode11Addon())
   terminal.open(terminalContainer.value)
   fitAddon.fit()
 
