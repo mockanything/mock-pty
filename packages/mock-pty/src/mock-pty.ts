@@ -2,6 +2,8 @@ import { EventEmitter2 } from './event-emitter'
 import type { IPty, IPtyForkOptions } from './types'
 import { getEnv } from './platform'
 import { MockFileSystem } from './file-system'
+import { lookupHandler } from './commands/registry'
+import type { CommandContext } from './commands/index'
 
 export class MockPty implements IPty {
   public readonly pid: number
@@ -213,7 +215,7 @@ export class MockPty implements IPty {
     let word: string
     let prefix: string
     if (isCommand) {
-      const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history']
+      const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history', 'top', 'date', 'ps', 'head', 'tail', 'less', 'cp', 'mv', 'find', 'hostname', 'id', 'uname']
       const builtinMatches = builtins.filter(c => c.startsWith(this._currentInput))
       const binFs = this._fs.getEntry('/bin')
       const binNames = binFs?.type === 'directory' ? [...binFs.children.keys()] : []
@@ -273,64 +275,28 @@ export class MockPty implements IPty {
     const trimmed = command.trim()
     if (!trimmed) { this._writePrompt(); return }
 
-    // Parse command and args
     const parts = this._parseCommandLine(trimmed)
     const cmd = parts[0]
     const args = parts.slice(1).join(' ')
 
-    switch (cmd) {
-      case 'exit':
-      case 'quit':
-        this.destroy(0)
-        return
-      case 'clear':
-      case 'cls':
-        this._writeOutput('\x1b[2J\x1b[0;0H')
-        break
-      case 'pwd':
-        this._writeOutput(`${this._fs.cwdPath}\r\n`)
-        break
-      case 'whoami':
-        this._writeOutput('root\r\n')
-        break
-      case 'history':
-        this._writeOutput(`${this._history.join('')}\r\n`)
-        break
-      case 'help':
-        this._writeOutput(
-          'Built-in commands:\r\n' +
-          '  ls, ll, cd, pwd, cat, whoami, echo, touch, mkdir, rm, rmdir,\r\n' +
-          '  clear, exit, help, history\r\n'
-        )
-        break
-      case 'echo':
-        this._handleEcho(args)
-        break
-      case 'cd':
-        this._handleCd(args)
-        break
-      case 'ls':
-      case 'll':
-      case 'dir':
-        this._writeOutput(this._fs.ls((cmd === 'll' ? '-l ' : '') + args))
-        break
-      case 'cat':
-        this._handleCat(args)
-        break
-      case 'touch':
-        this._handleFsCmd('touch', args)
-        break
-      case 'mkdir':
-        this._handleFsCmd('mkdir', args)
-        break
-      case 'rm':
-        this._handleFsCmd('rm', args)
-        break
-      case 'rmdir':
-        this._handleFsCmd('rmdir', args)
-        break
-      default:
-        this._handleUnknown(cmd, trimmed)
+    if (cmd === 'exit' || cmd === 'quit') {
+      this.destroy(0)
+      return
+    }
+
+    const ctx: CommandContext = {
+      fs: this._fs,
+      history: this._history,
+      startTime: this._startTime,
+      writeOutput: (d) => this._writeOutput(d),
+      destroy: (c) => this.destroy(c),
+    }
+
+    const handler = lookupHandler(cmd)
+    if (handler) {
+      handler(args, ctx)
+    } else {
+      this._handleUnknown(cmd, trimmed)
     }
 
     this._writePrompt()
@@ -396,6 +362,45 @@ export class MockPty implements IPty {
         case 'rmdir': err = this._fs.rmdir(target); break
       }
       if (err) this._writeOutput(err + '\r\n')
+    }
+  }
+
+  private _handleTop(): void {
+    const processes = [
+      { pid: 1, user: 'root', pr: 20, ni: 0, virt: 10000, res: 5000, shr: 3000, cpu: 0.0, mem: 0.1, time: '0:00.01', cmd: 'init' },
+      { pid: 2, user: 'root', pr: 20, ni: 0, virt: 0, res: 0, shr: 0, cpu: 0.0, mem: 0.0, time: '0:00.00', cmd: 'kthreadd' },
+      { pid: 100, user: 'root', pr: 20, ni: 0, virt: 50000, res: 20000, shr: 8000, cpu: 0.3, mem: 0.1, time: '0:02.34', cmd: 'bash' },
+      { pid: 101, user: 'root', pr: 20, ni: 0, virt: 25000, res: 10000, shr: 5000, cpu: 0.0, mem: 0.1, time: '0:00.12', cmd: 'sshd' },
+      { pid: 102, user: 'root', pr: 20, ni: 0, virt: 80000, res: 35000, shr: 12000, cpu: 1.2, mem: 0.2, time: '0:05.67', cmd: 'nginx' },
+      { pid: 200, user: 'root', pr: 20, ni: 0, virt: 40000, res: 15000, shr: 6000, cpu: 0.0, mem: 0.1, time: '0:00.45', cmd: 'cron' },
+      { pid: 201, user: 'root', pr: 20, ni: 0, virt: 30000, res: 12000, shr: 4000, cpu: 0.0, mem: 0.1, time: '0:00.03', cmd: 'getty' },
+      { pid: 300, user: 'root', pr: 20, ni: 0, virt: 60000, res: 25000, shr: 9000, cpu: 0.5, mem: 0.2, time: '0:01.23', cmd: 'python3' },
+    ]
+
+    const totalMem = 16384000
+    const freeMem = 8200000
+    const usedMem = totalMem - freeMem
+    const uptime = Math.floor((Date.now() - this._startTime) / 1000)
+    const days = Math.floor(uptime / 86400)
+    const hours = Math.floor((uptime % 86400) / 3600)
+    const mins = Math.floor((uptime % 3600) / 60)
+
+    this._writeOutput(
+      `top - ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(uptime % 60).padStart(2, '0')} up ${days ? days + ' days, ' : ''}${hours}:${String(mins).padStart(2, '0')},  1 user,  load average: 0.00, 0.00, 0.00\r\n` +
+      `Tasks: ${processes.length} total,   1 running, ${processes.length - 1} sleeping,   0 stopped,   0 zombie\r\n` +
+      `%Cpu(s):  0.0 us,  0.0 sy,  0.0 ni,100.0 id,  0.0 wa,  0.0 hi,  0.0 si,  0.0 st\r\n` +
+      `MiB Mem :   ${(totalMem / 1024).toFixed(1)} total,   ${(freeMem / 1024).toFixed(1)} free,   ${(usedMem / 1024).toFixed(1)} used\r\n` +
+      `MiB Swap:   4096.0 total,   4096.0 free,      0.0 used\r\n\r\n`
+    )
+
+    this._writeOutput(
+      '  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\r\n'
+    )
+
+    for (const p of processes) {
+      this._writeOutput(
+        `${String(p.pid).padStart(5)} ${p.user.padEnd(9)} ${String(p.pr).padStart(2)} ${String(p.ni).padStart(2)} ${String(p.virt).padStart(7)} ${String(p.res).padStart(6)} ${String(p.shr).padStart(5)} S ${String(p.cpu).padStart(4)} ${String(p.mem).padStart(4)} ${p.time.padStart(8)} ${p.cmd}\r\n`
+      )
     }
   }
 

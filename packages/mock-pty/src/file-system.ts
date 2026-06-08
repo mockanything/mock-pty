@@ -216,6 +216,60 @@ export class MockFileSystem {
     return entry ?? undefined
   }
 
+  readFile(path: string): string | null {
+    const resolved = this._resolvePath(path)
+    const entry = this._resolveEntry(resolved)
+    if (!entry) return null
+    if (entry.type === 'directory') return null
+    return entry.provider ? entry.provider() : (entry.content ?? '')
+  }
+
+  cp(src: string, dest: string): string | null {
+    const srcResolved = this._resolvePath(src)
+    const srcEntry = this._resolveEntry(srcResolved)
+    if (!srcEntry) return `cp: cannot stat '${src}': No such file or directory`
+    if (srcEntry.type === 'directory') return `cp: omitting directory '${src}'`
+
+    const content = srcEntry.provider ? srcEntry.provider() : (srcEntry.content ?? '')
+    return this.writeFile(dest, content)
+  }
+
+  mv(src: string, dest: string): string | null {
+    const srcResolved = this._resolvePath(src)
+    const srcEntry = this._resolveEntry(srcResolved)
+    if (!srcEntry) return `mv: cannot stat '${src}': No such file or directory`
+    if (srcEntry.type === 'directory') return `mv: cannot move '${src}': Is a directory`
+
+    const content = srcEntry.provider ? srcEntry.provider() : (srcEntry.content ?? '')
+    const writeErr = this.writeFile(dest, content)
+    if (writeErr) return writeErr
+
+    srcEntry.parent.children.delete(srcEntry.name)
+    return null
+  }
+
+  find(basePath: string, name: string): string[] {
+    const resolved = this._resolvePath(basePath)
+    const dir = this._resolveDir(resolved)
+    if (!dir) return []
+
+    const results: string[] = []
+    this._findRecursive(dir, name, results)
+    return results
+  }
+
+  private _findRecursive(dir: MockDirectory, name: string, results: string[]): void {
+    for (const entry of dir.children.values()) {
+      const fullPath = this._pathOf(entry)
+      if (entry.type === 'file' && entry.name.includes(name)) {
+        results.push(fullPath)
+      }
+      if (entry.type === 'directory') {
+        this._findRecursive(entry, name, results)
+      }
+    }
+  }
+
   // ── path utils ──
 
   private _resolvePath(path: string): string {

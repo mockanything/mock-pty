@@ -422,6 +422,221 @@ describe('MockPty', () => {
     })
   })
 
+  describe('new commands', () => {
+    it('hostname should print hostname', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('hostname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('mockhost'))).toBe(true)
+    })
+
+    it('id should print user info', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('id\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('uid=0(root)'))).toBe(true)
+    })
+
+    it('whoami should print root', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('whoami\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('root'))).toBe(true)
+    })
+
+    it('date should print date', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('date\r')
+      await tick(50)
+      expect(events.some((e) => e.length > 0)).toBe(true)
+    })
+
+    it('uname should print Linux', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('uname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('Linux'))).toBe(true)
+    })
+
+    it('uname -a should print full info', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('uname -a\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('x86_64'))).toBe(true)
+    })
+
+    it('ps should print process list', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('ps\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('bash'))).toBe(true)
+    })
+
+    it('ps aux should print extended process list', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('ps aux\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('VSZ'))).toBe(true)
+    })
+
+    it('head should print first lines of file', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('head /etc/hostname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('mockhost'))).toBe(true)
+    })
+
+    it('head -n 1 should limit lines', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('head -n 1 /etc/passwd\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('root'))).toBe(true)
+    })
+
+    it('head on missing file should print error', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('head /nonexistent\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('No such file'))).toBe(true)
+    })
+
+    it('tail should print last lines of file', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('tail /etc/passwd\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('root'))).toBe(true)
+    })
+
+    it('less should print file content', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('less /etc/hostname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('mockhost'))).toBe(true)
+    })
+
+    it('less on missing file should print error', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('less /nonexistent\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('No such file'))).toBe(true)
+    })
+
+    it('cp should copy file', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      pty.onData(() => {})
+      pty.write('cp /etc/hostname /tmp/hostname_copy\r')
+      await tick(50)
+      const fs = (pty as any)._fs
+      expect(fs.readFile('/tmp/hostname_copy')).toBe('mockhost\n')
+    })
+
+    it('cp on missing file should print error', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('cp /nonexistent /tmp/x\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('No such file'))).toBe(true)
+    })
+
+    it('mv should move file', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      pty.onData(() => {})
+      pty.write('cp /etc/hostname /tmp/to_move\r')
+      await tick(50)
+      pty.write('mv /tmp/to_move /tmp/moved\r')
+      await tick(50)
+      const fs = (pty as any)._fs
+      expect(fs.readFile('/tmp/moved')).toBe('mockhost\n')
+      expect(fs.readFile('/tmp/to_move')).toBeNull()
+    })
+
+    it('mv on missing file should print error', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('mv /nonexistent /tmp/x\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('No such file'))).toBe(true)
+    })
+
+    it('find should search files by name in current dir', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('find file\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('file1.txt') || e.includes('file2.js'))).toBe(true)
+    })
+
+    it('find with path should search in given directory', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('find /etc hostname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('/etc/hostname'))).toBe(true)
+    })
+
+    it('find -name should work', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('find /etc -name hostname\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('/etc/hostname'))).toBe(true)
+    })
+  })
+
   describe('unknown commands', () => {
     it('should report command not found', async () => {
       const pty = createPty()
