@@ -16,7 +16,7 @@ export class EventEmitter2<T> {
   }
 
   fire(e: T): void {
-    this._listeners.forEach((l) => l(e))
+    this._listeners.slice().forEach((l) => l(e))
   }
 
   dispose(): void {
