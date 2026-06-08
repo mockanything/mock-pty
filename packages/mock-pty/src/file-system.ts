@@ -87,8 +87,7 @@ export class MockFileSystem {
       ]
       return this._formatLong([...dots, ...entries])
     }
-    const shown = entries.filter(e => !e.name.startsWith('.'))
-    return this._formatShort(shown)
+    return this._formatShort(entries)
   }
 
   private _formatShort(entries: MockEntry[]): string {
