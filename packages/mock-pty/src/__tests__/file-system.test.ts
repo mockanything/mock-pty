@@ -247,4 +247,90 @@ describe('MockFileSystem', () => {
     const fs = new MockFileSystem()
     expect(fs.cat('/dev/tty')).toContain('[tty output]')
   })
+
+  describe('readFile', () => {
+    it('returns file content for existing file', () => {
+      const fs = new MockFileSystem()
+      expect(fs.readFile('/etc/hostname')).toBe('mockhost\n')
+    })
+
+    it('returns null for nonexistent file', () => {
+      const fs = new MockFileSystem()
+      expect(fs.readFile('/nonexistent')).toBeNull()
+    })
+
+    it('returns null for directory', () => {
+      const fs = new MockFileSystem()
+      expect(fs.readFile('/etc')).toBeNull()
+    })
+  })
+
+  describe('cp', () => {
+    it('copies file content', () => {
+      const fs = new MockFileSystem()
+      expect(fs.cp('/etc/hostname', '/tmp/copied')).toBeNull()
+      expect(fs.readFile('/tmp/copied')).toBe('mockhost\n')
+    })
+
+    it('returns error for nonexistent source', () => {
+      const fs = new MockFileSystem()
+      const err = fs.cp('/nonexistent', '/tmp/x')
+      expect(err).toContain('No such file or directory')
+    })
+
+    it('returns error for directory source', () => {
+      const fs = new MockFileSystem()
+      const err = fs.cp('/etc', '/tmp/x')
+      expect(err).toContain('omitting directory')
+    })
+  })
+
+  describe('mv', () => {
+    it('moves file to new location', () => {
+      const fs = new MockFileSystem()
+      expect(fs.mv('/etc/hostname', '/tmp/moved_hostname')).toBeNull()
+      expect(fs.readFile('/tmp/moved_hostname')).toBe('mockhost\n')
+      expect(fs.readFile('/etc/hostname')).toBeNull()
+    })
+
+    it('returns error for nonexistent source', () => {
+      const fs = new MockFileSystem()
+      const err = fs.mv('/nonexistent', '/tmp/x')
+      expect(err).toContain('No such file or directory')
+    })
+
+    it('returns error for directory source', () => {
+      const fs = new MockFileSystem()
+      const err = fs.mv('/etc', '/tmp/x')
+      expect(err).toContain('Is a directory')
+    })
+  })
+
+  describe('find', () => {
+    it('finds files by name', () => {
+      const fs = new MockFileSystem()
+      const results = fs.find('/', 'hostname')
+      expect(results).toContain('/etc/hostname')
+    })
+
+    it('returns empty array for no matches', () => {
+      const fs = new MockFileSystem()
+      const results = fs.find('/', 'zzzzzzz')
+      expect(results).toEqual([])
+    })
+
+    it('returns empty array for nonexistent base path', () => {
+      const fs = new MockFileSystem()
+      const results = fs.find('/nonexistent', 'x')
+      expect(results).toEqual([])
+    })
+
+    it('finds multiple matching files', () => {
+      const fs = new MockFileSystem()
+      const results = fs.find('/root', 'file')
+      expect(results.length).toBeGreaterThanOrEqual(2)
+      expect(results.some(r => r.includes('file1.txt'))).toBe(true)
+      expect(results.some(r => r.includes('file2.js'))).toBe(true)
+    })
+  })
 })
