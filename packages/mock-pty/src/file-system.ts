@@ -183,11 +183,29 @@ export class MockFileSystem {
   }
 
   complete(prefix: string): string[] {
+    const hasSlash = prefix.includes('/')
+    if (!hasSlash) {
+      const candidates: string[] = []
+      for (const name of this._cwd.children.keys()) {
+        if (name.startsWith(prefix)) {
+          candidates.push(name + (this._cwd.children.get(name)!.type === 'directory' ? '/' : ''))
+        }
+      }
+      return candidates
+    }
+
+    const idx = prefix.lastIndexOf('/')
+    const dirPart = prefix.slice(0, idx) || '/'
+    const filePart = prefix.slice(idx + 1)
+    const resolved = dirPart.startsWith('/') ? dirPart : this._resolvePath(dirPart)
+    const dir = this._resolveDir(resolved)
+    if (!dir) return []
+
     const candidates: string[] = []
-    const dir = this._cwd
+    const base = dirPart === '/' ? '/' : (dirPart.startsWith('/') ? dirPart + '/' : dirPart + '/')
     for (const name of dir.children.keys()) {
-      if (name.startsWith(prefix)) {
-        candidates.push(dir.children.get(name)!.type === 'directory' ? name + '/' : name)
+      if (name.startsWith(filePart)) {
+        candidates.push(base + name + (dir.children.get(name)!.type === 'directory' ? '/' : ''))
       }
     }
     return candidates

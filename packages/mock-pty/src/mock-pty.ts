@@ -128,6 +128,9 @@ export class MockPty implements IPty {
       case '\x04':
         this._handleCtrlD()
         return
+      case '\x0c':
+        this._handleCtrlL()
+        return
       case '\t':
         this._handleTab()
         return
@@ -189,6 +192,11 @@ export class MockPty implements IPty {
     this._writePrompt()
   }
 
+  private _handleCtrlL(): void {
+    this._writeOutput('\x1b[2J\x1b[H')
+    this._writePrompt()
+  }
+
   private _handleCtrlD(): void {
     if (this._currentInput.length === 0) {
       this.destroy(0)
@@ -198,20 +206,59 @@ export class MockPty implements IPty {
   }
 
   private _handleTab(): void {
-    const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history']
-    const fsCompletions = this._fs.complete(this._currentInput)
-    const all = [...builtins.filter((c) => c.startsWith(this._currentInput)), ...fsCompletions].sort()
-    const matches = [...new Set(all)]
+    const spaceIdx = this._currentInput.lastIndexOf(' ')
+    const isCommand = spaceIdx === -1
+
+    let matches: string[]
+    let word: string
+    let prefix: string
+    if (isCommand) {
+      const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history']
+      const builtinMatches = builtins.filter(c => c.startsWith(this._currentInput))
+      const binFs = this._fs.getEntry('/bin')
+      const binNames = binFs?.type === 'directory' ? [...binFs.children.keys()] : []
+      const binMatches = binNames.filter(n => n.startsWith(this._currentInput))
+      matches = [...new Set([...builtinMatches, ...binMatches])].sort()
+      word = this._currentInput
+      prefix = ''
+    } else {
+      word = this._currentInput.slice(spaceIdx + 1)
+      prefix = this._currentInput.slice(0, spaceIdx + 1)
+      if (word.startsWith('-')) return
+      matches = this._fs.complete(word).sort()
+    }
+
+    if (matches.length === 0) return
 
     if (matches.length === 1) {
-      const completion = matches[0].slice(this._currentInput.length)
-      this._currentInput = matches[0].replace(/\/$/, '')
-      this._writeOutput(completion)
-    } else if (matches.length > 1) {
-      this._writeOutput('\r\n')
-      matches.forEach((cmd) => this._writeOutput(`${cmd}    `))
-      this._writeOutput(`\r\nroot@mockhost:${this._fs.cwdPath}# ${this._currentInput}`)
+      const full = matches[0].replace(/\/$/, '')
+      this._writeOutput(full.slice(word.length))
+      this._currentInput = prefix + full
+      return
     }
+
+    const common = this._commonPrefix(matches)
+    if (common.length > word.length) {
+      this._writeOutput(common.slice(word.length))
+      this._currentInput = prefix + common
+      return
+    }
+
+    this._writeOutput('\r\n')
+    matches.forEach(m => this._writeOutput(`${m}    `))
+    this._writeOutput(`\r\nroot@mockhost:${this._fs.cwdPath}# ${prefix}${word}`)
+  }
+
+  private _commonPrefix(strings: string[]): string {
+    if (strings.length === 0) return ''
+    let prefix = strings[0]
+    for (let i = 1; i < strings.length; i++) {
+      while (strings[i].indexOf(prefix) !== 0) {
+        prefix = prefix.slice(0, -1)
+        if (prefix === '') return ''
+      }
+    }
+    return prefix
   }
 
   private _handlePrintableChar(char: string): void {
