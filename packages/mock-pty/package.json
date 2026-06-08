@@ -1,6 +1,6 @@
 {
   "name": "@gausszhou/mock-pty",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A mock PTY implementation compatible with node-pty API, works in both Node.js and browser",
   "type": "module",
   "main": "./dist/index.js",
