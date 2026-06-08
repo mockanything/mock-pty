@@ -1,0 +1,12 @@
+{
+  "name": "mock-pty-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @mock-pty/playground dev",
+    "dev:playground": "pnpm dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "clean": "pnpm -r clean"
+  }
+}
