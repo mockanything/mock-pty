@@ -637,6 +637,58 @@ describe('MockPty', () => {
     })
   })
 
+  describe('which/where', () => {
+    it('which should show built-in command', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('which ls\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('built-in'))).toBe(true)
+    })
+
+    it('which should show /bin command path', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('which bash\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('/bin/bash'))).toBe(true)
+    })
+
+    it('which should report not found', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('which nonexistent\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('no'))).toBe(true)
+    })
+
+    it('where should find built-in and /bin paths', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('where bash\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('/bin/bash'))).toBe(true)
+    })
+
+    it('where should report not found', async () => {
+      const pty = createPty()
+      await waitForOutput(pty)
+      const events: string[] = []
+      pty.onData((e) => events.push(e))
+      pty.write('where nonexistent\r')
+      await tick(50)
+      expect(events.some((e) => e.includes('no ') && e.includes(' found'))).toBe(true)
+    })
+  })
+
   describe('unknown commands', () => {
     it('should report command not found', async () => {
       const pty = createPty()

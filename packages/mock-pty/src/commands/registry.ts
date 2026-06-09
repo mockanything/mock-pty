@@ -61,6 +61,47 @@ const commandMap: Record<string, CommandHandler> = {
     writeOutput('uid=0(root) gid=0(root) groups=0(root)\r\n')
   },
 
+  which: (args, { fs, writeOutput }) => {
+    const cmd = args.trim()
+    if (!cmd) {
+      writeOutput('which: missing operand\r\n')
+      return
+    }
+    const builtins = ['ls','ll','cd','pwd','cat','whoami','echo','touch','mkdir','rm','rmdir','clear','cls','exit','quit','help','history','top','date','ps','head','tail','less','cp','mv','find','hostname','id','uname','which','where']
+    if (builtins.includes(cmd)) {
+      writeOutput(`${cmd}: shell built-in command\r\n`)
+      return
+    }
+    const entry = fs.getEntry('/bin/' + cmd)
+    if (entry) {
+      writeOutput(`/bin/${cmd}\r\n`)
+      return
+    }
+    writeOutput(`which: no ${cmd} in (/bin)\r\n`)
+  },
+
+  where: (args, { fs, writeOutput }) => {
+    const cmd = args.trim()
+    if (!cmd) {
+      writeOutput('where: missing operand\r\n')
+      return
+    }
+    const builtins = ['ls','ll','cd','pwd','cat','whoami','echo','touch','mkdir','rm','rmdir','clear','cls','exit','quit','help','history','top','date','ps','head','tail','less','cp','mv','find','hostname','id','uname','which','where']
+    let found = false
+    if (builtins.includes(cmd)) {
+      writeOutput(`${cmd}: shell built-in command\r\n`)
+      found = true
+    }
+    const entry = fs.getEntry('/bin/' + cmd)
+    if (entry) {
+      writeOutput(`/bin/${cmd}\r\n`)
+      found = true
+    }
+    if (!found) {
+      writeOutput(`where: no ${cmd} found\r\n`)
+    }
+  },
+
   uname: (args, { writeOutput }) => {
     const opts = args.trim()
     if (opts === '-a' || opts === '--all') {
@@ -81,7 +122,7 @@ const commandMap: Record<string, CommandHandler> = {
       'Built-in commands:\r\n' +
       '  ls, ll, cd, pwd, cat, whoami, echo, touch, mkdir, rm, rmdir,\r\n' +
       '  clear, exit, help, history, top, date, ps, head, tail, less,\r\n' +
-      '  cp, mv, find, hostname, id, uname\r\n'
+      '  cp, mv, find, hostname, id, uname, which, where\r\n'
     )
   },
 

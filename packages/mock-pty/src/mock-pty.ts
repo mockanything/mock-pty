@@ -215,7 +215,7 @@ export class MockPty implements IPty {
     let word: string
     let prefix: string
     if (isCommand) {
-      const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history', 'top', 'date', 'ps', 'head', 'tail', 'less', 'cp', 'mv', 'find', 'hostname', 'id', 'uname']
+      const builtins = ['ls', 'll', 'cd', 'pwd', 'cat', 'whoami', 'echo', 'touch', 'mkdir', 'rm', 'rmdir', 'clear', 'exit', 'help', 'history', 'top', 'date', 'ps', 'head', 'tail', 'less', 'cp', 'mv', 'find', 'hostname', 'id', 'uname', 'which', 'where']
       const builtinMatches = builtins.filter(c => c.startsWith(this._currentInput))
       const binFs = this._fs.getEntry('/bin')
       const binNames = binFs?.type === 'directory' ? [...binFs.children.keys()] : []
